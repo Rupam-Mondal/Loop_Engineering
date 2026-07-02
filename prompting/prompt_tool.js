@@ -1,13 +1,13 @@
 import OpenAI from "openai";
 import dotenv from "dotenv";
+import axios from "axios";
+import { exec } from "child_process";
 
 dotenv.config();
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API,
 });
-
-import axios from "axios";
 
 async function getWeatherData(cityName) {
   const geoRes = await axios.get(
@@ -39,6 +39,15 @@ async function getWeatherData(cityName) {
 
   return `The weather of ${cityName} is ${weatherRes.data.current.temperature_2m}°C`;
 }
+
+async function excecute(cmd){
+  return new Promise((res , rej) => {
+    exec(cmd , (err , out) => {
+      if(err) return res("There is a error")
+        else return res(out)
+    })
+  })
+}
 const system_prompt = `
     you are an expert AI engineer. You have to analyse the user input carefully
     you need to breakdown the problem into multiple subproblems. always breakdown
@@ -59,6 +68,29 @@ const system_prompt = `
 
      Avail Tools:-
      - "getWeatherData": getWeatherData(city:String) return weather info of the city
+     - "excecute": excecute(cmd:String) execute command user device and return output from stdout
+
+     IMPORTANT:
+
+The execute tool runs on Windows CMD.
+
+Do NOT generate Linux, Bash, WSL or PowerShell commands.
+
+Only generate valid Windows CMD commands.
+
+Never use:
+- cat
+- <<
+- EOF
+- EOL
+- touch
+- printf
+- bash syntax
+- single quoted strings
+
+Use only Windows CMD syntax.
+
+
     Rule:
      - Always output one step at a time wait for other step before proceding
      - Always maintain the sequesce of pipeline given in the example
@@ -127,6 +159,18 @@ async function main(query) {
     if(parsedResult.step == "Tool_request"){
       const {functionName , input} = parsedResult
       switch(functionName){
+        case "excecute": {
+          console.log(input)
+          const toolresult = await excecute(input);
+          msg_db.push({
+            role: "developer",
+            content: JSON.stringify({
+              step:"Tool_Output",
+              output:toolresult
+            })
+          })
+          continue;
+        }
         case "getWeatherData":{
           const result = await getWeatherData(input);
           msg_db.push({
@@ -145,4 +189,6 @@ async function main(query) {
   }
 }
 
-await main("what is the temp of Kolkata and bangalore ? ");
+await main("what is the weather of kolkata ,goa and then write the output this on a beautifull webpage. create a new folder saying weather and all html css file there and then run this on my browser ");
+
+
